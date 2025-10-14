@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Voice Transport Assistant</title>
+  <link rel="stylesheet" href="/static/app.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>🎤 Voice Transport Assistant</h1>
+    <p id="status" class="status">Ready</p>
+
+    <div class="controls">
+      <button id="speakBtn" class="primary">Speak</button>
+      <input id="queryInput" type="text" placeholder="Or type: Next train from Delhi to Mumbai" />
+      <button id="searchBtn">Search</button>
+    </div>
+
+    <section id="summary" class="summary" aria-live="polite"></section>
+    <section id="results" class="results" aria-live="polite"></section>
+  </main>
+
+  <script>
+    window.API_BASE = '';
+  </script>
+  <script src="/static/app.js"></script>
+</body>
+</html>
+
+

@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 from sqlalchemy import create_engine, text
 import logging
@@ -23,7 +23,10 @@ except Exception as e:
 
 @app.route('/')
 def home():
-    return "Voice-Based Transport Enquiry System Running!"
+    try:
+        return render_template('index.html')
+    except Exception:
+        return "Voice-Based Transport Enquiry System Running! (No template found)", 200
 
 @app.route('/api/health')
 def health_check():

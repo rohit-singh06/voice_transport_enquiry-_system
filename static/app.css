@@ -1,0 +1,23 @@
+:root{--bg:#0a0f1a;--panel:#0e1626;--card:#101a30;--text:#e8eef9;--muted:#9fb3d1;--accent:#5aa6ff;--accent-2:#21d4fd;--ok:#39d353;--warn:#ffd166;--err:#ff6b6b}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(1200px 800px at 10% 10%,#0d1830 0%,#0a0f1a 50%,#070b13 100%);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,sans-serif}
+.container{max-width:980px;margin:28px auto;padding:0 18px}
+h1{margin:0 0 18px;font-size:30px;letter-spacing:.3px}
+.status{display:inline-flex;align-items:center;gap:8px;margin:0 0 16px;color:var(--muted);background:#0f1b31;border:1px solid #203050;padding:6px 10px;border-radius:999px}
+.controls{display:grid;grid-template-columns:160px 1fr 120px;gap:10px;align-items:center;margin-bottom:16px}
+.controls input{flex:1;padding:12px 14px;border-radius:12px;border:1px solid #27324a;background:#0f1626;color:var(--text);outline:none}
+.controls input:focus{border-color:#3a5ab8}
+button{padding:12px 16px;border-radius:12px;border:1px solid #27324a;background:#13203a;color:var(--text);cursor:pointer;transition:transform .06s ease,opacity .2s ease}
+button.primary{background:linear-gradient(135deg,var(--accent),var(--accent-2));border:0;color:#041223;font-weight:700}
+button:active{transform:scale(.98)}
+button:disabled{opacity:.6;cursor:not-allowed}
+.summary{padding:14px 16px;border-radius:14px;background:#0f1b31;border:1px solid #1f2a44;margin:12px 0;font-weight:700}
+.results{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;margin-top:10px}
+.card{background:linear-gradient(180deg,#0f1a2c,#0c1524);border:1px solid #26314b;border-radius:14px;padding:14px;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.row{display:flex;justify-content:space-between;margin:8px 0}
+.label{color:var(--muted)}
+.value{font-weight:700}
+.pill{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;font-size:12px}
+.pill.ok{background:rgba(57,211,83,.12);border:1px solid rgba(57,211,83,.25);color:var(--ok)}
+.pill.err{background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.25);color:var(--err)}
+
