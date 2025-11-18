@@ -1,31 +1,212 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Voice Transport Assistant</title>
-  <link rel="stylesheet" href="/static/app.css" />
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Smart Transport Finder - Night Mode</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
+  <meta name="description" content="Find the best transport options with voice or manual search.">
 </head>
 <body>
-  <main class="container">
-    <h1>🎤 Voice Transport Assistant</h1>
-    <p id="status" class="status">Ready</p>
+  <!-- animated background layers -->
+  <div id="bg-wrap">
+    <div class="bg-gradient"></div>
+    <div class="bg-grid"></div>
+    <div class="bg-lights"></div>
+    <div class="floating-icons" aria-hidden="true">🚌🚆🚗🚍🚎🚐🚋🚖🚕🚓🚑</div>
+  </div>
 
-    <div class="controls">
-      <button id="speakBtn" class="primary">Speak</button>
-      <input id="queryInput" type="text" placeholder="Or type: Next train from Delhi to Mumbai" />
-      <button id="searchBtn">Search</button>
+  <!-- Nav -->
+  <nav class="top-nav">
+    <div class="nav-left">
+      <span class="brand-icon">🚌</span>
+      <span class="brand-text">Smart Transport</span>
     </div>
+    <div class="nav-right">
+  <a class="nav-btn" href="#search">🔍 Search</a>
+  <a class="nav-btn" id="help-btn" href="#">❓ Help</a>
 
-    <section id="summary" class="summary" aria-live="polite"></section>
-    <section id="results" class="results" aria-live="polite"></section>
+  <a class="nav-btn" id="bookmark-link" href="#bookmarks" title="Bookmarks">⭐ Bookmarks</a>
+  <a class="nav-btn logout" href="/logout">🚪 Logout</a>
+</div>
+
+  </nav>
+
+  <!-- main app -->
+  <main class="app-container">
+    <header class="app-header">
+      <h1><span class="title-icon">🚌</span><span class="title-text">Smart Transport Finder</span></h1>
+      <p class="subtitle">Voice-based transport enquiry • Real-time schedules & fares</p>
+    </header>
+
+    <section class="controls glass-card" id="search">
+      <div class="controls-row">
+        <div class="field">
+          <label for="source">📍 From</label>
+          <div class="input-with-icon">
+            <input id="source" type="text" placeholder="Enter source (city, station)" autocomplete="off">
+            <span class="field-icon">📍</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="destination">🎯 To</label>
+          <div class="input-with-icon">
+            <input id="destination" type="text" placeholder="Enter destination" autocomplete="off">
+            <span class="field-icon">🎯</span>
+          </div>
+        </div>
+
+        <div class="field small">
+          <label for="transport-type">🚌 Type</label>
+          <div class="input-with-icon">
+            <select id="transport-type">
+              <option value="">All</option>
+              <option value="bus">Bus</option>
+              <option value="train">Train</option>
+            </select>
+            <span class="field-icon">🛣️</span>
+          </div>
+        </div>
+
+        <div class="field small">
+          <label for="date">📅 Date</label>
+          <div class="input-with-icon">
+            <input id="date" type="date">
+            <span class="field-icon">📅</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="controls-row actions">
+        <button id="search-btn" class="btn primary ripple">
+          <span class="btn-icon">🔍</span>
+          <span>Search Transport</span>
+          <span class="loading hidden" id="search-loading"></span>
+        </button>
+
+        <button id="voice-btn" class="btn ghost" title="Use voice">
+          <span id="mic-icon" class="mic">🎤</span>
+          <span id="voice-label">Voice</span>
+        </button>
+
+        <button id="history-btn" class="btn ghost" title="Recent searches">🕓 Recent</button>
+
+        <div class="toggle-language">
+          <label for="language-select">🌐</label>
+          <select id="language-select">
+            <option value="en">EN</option>
+            <option value="hi">HI</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- voice hint -->
+      <div id="voice-hint" class="voice-hint hidden">Say: "Bus from Mumbai to Delhi"</div>
+    </section>
+
+    <!-- results -->
+    <section id="results-container" class="results"></section>
+
+    <!-- footer -->
+    <footer class="app-footer">
+      <p>Powered by Smart Transport Finder</p>
+    </footer>
   </main>
 
-  <script>
-    window.API_BASE = '';
-  </script>
-  <script src="/static/app.js"></script>
+  <!-- Recent searches slide-up -->
+  <aside id="history-panel" class="history-panel hidden">
+    <div class="history-header">
+      <h3>Recent Searches</h3>
+      <button id="close-history" class="btn small">Close</button>
+    </div>
+    <ul id="history-list" class="history-list"></ul>
+  </aside>
+
+ 
+<!-- ⭐ Bookmarks Modal -->
+<div id="bookmarks-overlay" class="bookmarks-overlay">
+  <aside id="bookmarks-panel" class="bookmarks-panel">
+    <div class="bookmarks-header">
+      <h3>⭐ My Bookmarked Schedules</h3>
+      <button id="close-bookmarks" class="btn small">✖ Close</button>
+    </div>
+    <ul id="bookmarks-list" class="bookmarks-list"></ul>
+  </aside>
+</div>
+
+<!-- Trip Details Modal -->
+<div id="details-modal" class="details-overlay hidden">
+  <div class="details-card">
+    <h3 id="details-operator"></h3>
+    <p><strong>Type:</strong> <span id="details-type"></span></p>
+    <p><strong>Departure:</strong> <span id="details-departure"></span></p>
+    <p><strong>Arrival:</strong> <span id="details-arrival"></span></p>
+    <p><strong>Distance:</strong> <span id="details-distance"></span> km</p>
+    <p><strong>Fare:</strong> ₹<span id="details-fare"></span></p>
+    <p><strong>Date:</strong> <span id="details-date"></span></p>
+    <button id="close-details" class="btn small">Close</button>
+  </div>
+</div>
+<!-- ================== HELP POPUP ================== -->
+<div id="help-overlay" class="help-overlay ">
+  <aside id="help-panel" class="help-panel">
+    <div class="help-header">
+      <h3>❓ Help & Instructions</h3>
+      <button id="help-close" class="btn small">✖ Close</button>
+
+    </div>
+
+    <div class="help-content">
+      <h4>🎤 Voice Commands</h4>
+      <ul>
+        <li>“Bus from Dehradun to Delhi”</li>
+        <li>“Train from Mumbai to Pune tomorrow”</li>
+        <li>“Bus from Noida to Agra on 15 November”</li>
+        <li>“Next bus from Jaipur to Kota”</li>
+        <li>“Trains from Chennai to Bangalore between 6 AM and 10 AM”</li>
+        <li>“Bus from Chandigarh to Shimla after 5 PM”</li>
+        <li>“Show buses from Lucknow to Kanpur day after tomorrow”</li>
+      </ul>
+
+      <h4>📅 Date Understanding</h4>
+      <ul>
+        <li>Today</li>
+        <li>Tomorrow</li>
+        <li>Day after tomorrow</li>
+        <li>Specific dates like “on 12 January”</li>
+      </ul>
+
+      <h4>⏱ Time Filters</h4>
+      <ul>
+        <li>“Between 6 AM and 9 AM”</li>
+        <li>“After 5 PM”</li>
+        <li>“Next train to Delhi” → shows upcoming departures</li>
+      </ul>
+
+      <h4>⭐ Bookmarks</h4>
+      <p>Bookmark any schedule and view them anytime in the ⭐ Bookmarks section.</p>
+
+      <h4>💰 Fare Calculation</h4>
+      <ul>
+        <li>Bus Type (Volvo, AC, Sleeper, Ordinary)</li>
+        <li>Operator multipliers (UPSRTC, MSRTC, KSRTC etc.)</li>
+        <li>Seat availability impact</li>
+        <li>Peak hours pricing (6–9 AM, 5–9 PM)</li>
+      </ul>
+
+      <h4>ℹ About</h4>
+      <p>
+        Smart Transport Finder is a modern, voice-enabled system for discovering 
+        buses and trains with real-time dynamic fare calculation and personalized results.
+      </p>
+    </div>
+  </aside>
+</div>
+
+
+<script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
-
 

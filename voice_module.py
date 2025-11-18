@@ -81,7 +81,7 @@ def process_query():
             else:
                 response = res.get("message", f"No {transport_type} found for this route.")
         else:
-            # General search
+            # General search - show next/earliest option by default
             url = f"http://127.0.0.1:5000/api/search?source={source}&destination={destination}&type={transport_type}"
             res = requests.get(url).json()
             
@@ -91,7 +91,24 @@ def process_query():
                     result = results[0]
                     response = f"Found {result['transport_type']} from {source} to {destination}: {result['operator']} at {result['departure_time']}, fare ₹{result['fare']}."
                 else:
-                    response = f"Found {len(results)} {transport_type} options from {source} to {destination}."
+                    # Show the next/earliest bus (first result is already sorted by departure_time)
+                    next_bus = results[0]
+                    response = f"The next {transport_type} from {source} to {destination} is {next_bus['operator']} at {next_bus['departure_time']}, fare ₹{next_bus['fare']}."
+                    
+                    # If there are more options, mention them briefly
+                    if len(results) > 1:
+                        if len(results) == 2:
+                            # If only 2 options, mention the other one
+                            other_bus = results[1]
+                            response += f" Another option is {other_bus['operator']} at {other_bus['departure_time']}."
+                        elif len(results) <= 5:
+                            # For 3-5 options, list them briefly
+                            other_options = results[1:]
+                            option_list = ", ".join([f"{opt['operator']} at {opt['departure_time']}" for opt in other_options])
+                            response += f" Other options: {option_list}."
+                        else:
+                            # For more than 5, just mention count
+                            response += f" There are {len(results) - 1} more {transport_type} options available."
             else:
                 response = res.get("message", f"No {transport_type} found for this route.")
         

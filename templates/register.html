@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Create Account - Smart Transport Finder</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='login.css') }}">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚌</text></svg>">
+</head>
+<body>
+  <!-- Floating Emoji Background -->
+  <div class="floating-icons">🚌🚆✈️🚗🚍🚎🚕🚲</div>
+
+  <!-- 🌙 Theme Toggle -->
+  <div class="theme-toggle" id="theme-toggle">🌙</div>
+
+  <!-- Registration Container -->
+  <div class="login-container">
+    <div class="login-card">
+      <h1><span class="title-icon">🚌</span> <span class="title-text">Create Account</span></h1>
+      <p class="subtitle">Join Smart Transport Finder</p>
+
+      <form id="register-form" class="login-form">
+        <div class="input-group">
+          <label for="first_name">🧑 First Name</label>
+          <input type="text" id="first_name" name="first_name" required placeholder="Enter first name" />
+        </div>
+
+        <div class="input-group">
+          <label for="last_name">👤 Last Name</label>
+          <input type="text" id="last_name" name="last_name" required placeholder="Enter last name" />
+        </div>
+
+        <div class="input-group">
+          <label for="email">📧 Email</label>
+          <input type="email" id="email" name="email" required placeholder="Enter your email" />
+        </div>
+
+        <div class="input-group">
+          <label for="password">🔒 Password</label>
+          <input type="password" id="password" name="password" required placeholder="Create a password" />
+        </div>
+
+        <div class="input-group">
+          <label for="phone">📱 Phone (Optional)</label>
+          <input type="tel" id="phone" name="phone" placeholder="Enter phone number (optional)" />
+        </div>
+
+        <button type="submit" class="login-btn">🚀 Register</button>
+      </form>
+
+      <div class="footer-links">
+        <a href="/login" class="link">Already have an account? Login</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Success Overlay -->
+  <div class="success-overlay hidden" id="success-overlay">
+    <div class="success-message transport-animation">
+      <div class="icons">🚌🚆✈️🚗</div>
+      <h2>Account Created!</h2>
+      <p>Redirecting to login...</p>
+    </div>
+  </div>
+
+  <script src="{{ url_for('static', filename='register.js') }}"></script>
+</body>
+</html>
