@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Dashboard · Smart Transport</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛠️</text></svg>">
+  <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+</head>
+<body>
+  <nav class="admin-nav">
+    <div class="nav-brand">
+      <span class="brand-icon">🛠️</span>
+      <div class="brand-text">
+        <strong>Smart Transport</strong>
+        <span>Admin Control Room</span>
+      </div>
+    </div>
+    <div class="nav-actions">
+      <span class="welcome">Hello, {{ user_name or 'Admin' }}</span>
+      <a class="nav-link" href="{{ url_for('home') }}">🏠 Main App</a>
+      <a class="nav-link" href="/logout">🚪 Logout</a>
+    </div>
+  </nav>
+
+  <main class="admin-wrapper">
+    <section class="kpi-grid" id="kpi-grid">
+      <article class="kpi-card">
+        <header>Total Users</header>
+        <strong data-field="total_users">--</strong>
+        <span>All registered users</span>
+      </article>
+      <article class="kpi-card">
+        <header>Active This Week</header>
+        <strong data-field="weekly_active">--</strong>
+        <span>Logged in during last 7 days</span>
+      </article>
+      <article class="kpi-card">
+        <header>Live Schedules</header>
+        <strong data-field="total_schedules">--</strong>
+        <span>Entries in schedules table</span>
+      </article>
+      <article class="kpi-card">
+        <header>Saved Bookmarks</header>
+        <strong data-field="total_bookmarks">--</strong>
+        <span>User favourites</span>
+      </article>
+    </section>
+
+    <section class="split-panels">
+      <article class="panel">
+        <header>
+          <div>
+            <h3>Recent Sign-ups</h3>
+            <p>Latest 5 accounts</p>
+          </div>
+        </header>
+        <ul id="recent-users" class="item-list">
+          <li class="empty-state">Loading recent users…</li>
+        </ul>
+      </article>
+
+      <article class="panel">
+        <header>
+          <div>
+            <h3>Top Performing Routes</h3>
+            <p>Based on schedules & seats</p>
+          </div>
+        </header>
+        <ul id="top-routes" class="item-list">
+          <li class="empty-state">Loading routes…</li>
+        </ul>
+      </article>
+    </section>
+
+    <section class="panel route-panel">
+      <header>
+        <div>
+          <h3>Add New Route</h3>
+          <p>Link two existing stations with distance & transport type</p>
+        </div>
+      </header>
+
+      <form id="route-form" class="route-form">
+        <div class="station-field">
+          <label for="route-source">Source Station</label>
+          <div class="station-search">
+            <input id="route-source" type="text" placeholder="Type to search station" autocomplete="off">
+            <ul id="source-suggestions" class="station-suggestions hidden"></ul>
+            <input type="hidden" id="route-source-id">
+          </div>
+        </div>
+
+        <div class="station-field">
+          <label for="route-destination">Destination Station</label>
+          <div class="station-search">
+            <input id="route-destination" type="text" placeholder="Type to search station" autocomplete="off">
+            <ul id="destination-suggestions" class="station-suggestions hidden"></ul>
+            <input type="hidden" id="route-destination-id">
+          </div>
+        </div>
+
+        <div class="route-inline-fields">
+          <label>
+            Transport Type
+            <select id="route-transport">
+              <option value="bus">Bus</option>
+              <option value="train">Train</option>
+            </select>
+          </label>
+
+          <label>
+            Distance (km)
+            <input id="route-distance" type="number" min="1" step="0.1" placeholder="e.g. 250">
+          </label>
+
+          <label>
+            Route Code
+            <input id="route-code" type="text" placeholder="e.g. NDLS-MUM-01">
+          </label>
+        </div>
+
+        <div class="route-actions">
+          <button type="submit" class="ghost-btn">➕ Add Route</button>
+          <span class="route-hint">Stations must already exist in the master data</span>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel schedule-panel">
+      <header>
+        <div>
+          <h3>Add New Schedule</h3>
+          <p>Assign operator & timings to an existing route</p>
+        </div>
+      </header>
+
+      <form id="schedule-form" class="schedule-form">
+        <div class="station-field">
+          <label for="schedule-route">Route</label>
+          <div class="station-search">
+            <input id="schedule-route" type="text" placeholder="Search by route code or city" autocomplete="off">
+            <ul id="route-suggestions" class="station-suggestions hidden"></ul>
+            <input type="hidden" id="schedule-route-id">
+          </div>
+        </div>
+
+        <div class="route-inline-fields">
+          <label>
+            Operator
+            <input id="schedule-operator" type="text" placeholder="e.g. UPSRTC">
+          </label>
+          <label>
+            Departure Time
+            <input id="schedule-departure" type="time">
+          </label>
+          <label>
+            Arrival Time
+            <input id="schedule-arrival" type="time">
+          </label>
+        </div>
+
+        <label class="days-field">
+          Operating Days
+          <input id="schedule-days" type="text" placeholder="e.g. Daily, Mon-Fri">
+        </label>
+
+        <div class="route-inline-fields">
+          <label>
+            Availability Date
+            <input id="schedule-date" type="date">
+          </label>
+          <label>
+            Seats Total
+            <input id="schedule-seats-total" type="number" min="0" step="1" placeholder="40">
+          </label>
+          <label>
+            Seats Booked
+            <input id="schedule-seats-booked" type="number" min="0" step="1" placeholder="0">
+          </label>
+        </div>
+
+        <div class="route-actions">
+          <button type="submit" class="ghost-btn">➕ Add Schedule</button>
+          <span class="route-hint">Times use 24-hr format (HH:MM). Availability fields are optional.</span>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel">
+      <header class="table-header">
+        <div>
+          <h3>Manage Users</h3>
+          <p>Enable/disable access or review recent activity</p>
+        </div>
+        <div class="table-actions">
+          <input id="user-search" type="search" placeholder="Search by name or email">
+          <button id="refresh-users" class="ghost-btn">↻ Refresh</button>
+        </div>
+      </header>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Name</th>
+              <th>Email</th>
+              <th>Phone</th>
+              <th>Created</th>
+              <th>Last Login</th>
+              <th>Status</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="users-table-body">
+            <tr>
+              <td colspan="8" class="empty-state">Loading users…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="{{ url_for('static', filename='admin.js') }}" defer></script>
+</body>
+</html>
+

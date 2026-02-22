@@ -2,16 +2,25 @@ from flask import Flask, request, jsonify, render_template, session, redirect, u
 from flask_cors import CORS
 from sqlalchemy import create_engine, text
 from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
 import logging
 from datetime import datetime
 import secrets
 import re
+import os
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(32)  # Generate a secret key for sessions
 CORS(app)  # Enable CORS for web frontend
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+DEFAULT_ADMIN_EMAILS = "admin@transport.com,rohitmahargain@gmail.com"
+ADMIN_EMAILS = {
+    email.strip().lower()
+    for email in os.environ.get("ADMIN_EMAILS", DEFAULT_ADMIN_EMAILS).split(",")
+    if email.strip()
+}
 try:
     engine = create_engine("postgresql+psycopg2://postgres:rohit@localhost:5432/transport_db")
     # Test connection
@@ -21,6 +30,23 @@ try:
 except Exception as e:
     logger.error(f"Database connection failed: {e}")
     engine = None
+
+
+def is_admin_user():
+    return 'email' in session and session['email'].lower() in ADMIN_EMAILS
+
+
+def admin_required(view_func):
+    @wraps(view_func)
+    def wrapper(*args, **kwargs):
+        if not is_admin_user():
+            if request.path.startswith('/api/'):
+                return jsonify({"error": "Admin access required"}), 403
+            if 'user_id' not in session:
+                return redirect(url_for('login'))
+            return redirect(url_for('home'))
+        return view_func(*args, **kwargs)
+    return wrapper
 
 # ========== AUTHENTICATION ROUTES ==========
 
@@ -51,14 +77,17 @@ def login():
                     session['language'] = user[3] or 'en'
                     session['name'] = user[4] or email
                     
+                    is_admin = user[1].lower() in ADMIN_EMAILS
                     return jsonify({
                         "success": True,
                         "message": "Login successful",
                         "user": {
                             "email": user[1],
                             "name": user[4] or email,
-                            "language": user[3] or 'en'
-                        }
+                            "language": user[3] or 'en',
+                            "is_admin": is_admin
+                        },
+                        "is_admin": is_admin
                     })
                 else:
                     return jsonify({"error": "Invalid email or password"}), 401
@@ -125,8 +154,465 @@ def get_user():
         "user_id": session['user_id'],
         "email": session['email'],
         "name": session.get('name', session['email']),
-        "language": session.get('language', 'en')
+        "language": session.get('language', 'en'),
+        "is_admin": is_admin_user()
     })
+
+
+@app.route('/api/admin/metrics')
+@admin_required
+def admin_metrics():
+    """High-level KPIs for the admin dashboard."""
+    if not engine:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        with engine.connect() as conn:
+            counts_query = text("""
+                SELECT
+                    (SELECT COUNT(*) FROM users) AS total_users,
+                    (SELECT COUNT(*) FROM users WHERE is_active = TRUE) AS active_users,
+                    (SELECT COUNT(*) FROM users WHERE last_login >= NOW() - INTERVAL '7 days') AS weekly_active,
+                    (SELECT COUNT(*) FROM schedules) AS total_schedules,
+                    (SELECT COUNT(*) FROM routes) AS total_routes,
+                    (SELECT COUNT(*) FROM bookmarks) AS total_bookmarks
+            """)
+            counts = conn.execute(counts_query).mappings().first()
+            
+            recent_users_query = text("""
+                SELECT 
+                    user_id,
+                    first_name,
+                    last_name,
+                    email,
+                    is_active,
+                    created_at,
+                    last_login
+                FROM users
+                ORDER BY created_at DESC
+                LIMIT 5
+            """)
+            recent_users = conn.execute(recent_users_query).mappings().all()
+            
+            top_routes_query = text("""
+                SELECT 
+                    r.route_id,
+                    src.station_name AS source,
+                    dst.station_name AS destination,
+                    r.transport_type,
+                    COUNT(DISTINCT s.schedule_id) AS schedule_count,
+                    COALESCE(SUM(a.seats_available), 0) AS seats_available
+                FROM routes r
+                JOIN stations src ON r.source_station_id = src.station_id
+                JOIN stations dst ON r.destination_station_id = dst.station_id
+                LEFT JOIN schedules s ON s.route_id = r.route_id
+                LEFT JOIN availability a ON a.schedule_id = s.schedule_id AND a.travel_date >= CURRENT_DATE
+                GROUP BY r.route_id, src.station_name, dst.station_name, r.transport_type
+                ORDER BY schedule_count DESC, seats_available DESC
+                LIMIT 5
+            """)
+            top_routes = conn.execute(top_routes_query).mappings().all()
+        
+        response = {
+            "counts": {
+                "total_users": int(counts.get('total_users', 0)) if counts else 0,
+                "active_users": int(counts.get('active_users', 0)) if counts else 0,
+                "weekly_active": int(counts.get('weekly_active', 0)) if counts else 0,
+                "total_schedules": int(counts.get('total_schedules', 0)) if counts else 0,
+                "total_routes": int(counts.get('total_routes', 0)) if counts else 0,
+                "total_bookmarks": int(counts.get('total_bookmarks', 0)) if counts else 0,
+            },
+            "recent_users": [
+                {
+                    "user_id": row["user_id"],
+                    "name": f"{(row['first_name'] or '').strip()} {(row['last_name'] or '').strip()}".strip() or row["email"],
+                    "email": row["email"],
+                    "is_active": row["is_active"],
+                    "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+                    "last_login": row["last_login"].isoformat() if row["last_login"] else None
+                }
+                for row in recent_users
+            ],
+            "top_routes": [
+                {
+                    "route_id": row["route_id"],
+                    "source": row["source"],
+                    "destination": row["destination"],
+                    "transport_type": row["transport_type"],
+                    "schedule_count": int(row["schedule_count"] or 0),
+                    "seats_available": int(row["seats_available"] or 0)
+                }
+                for row in top_routes
+            ]
+        }
+        return jsonify(response)
+    except Exception as e:
+        logger.error(f"Admin metrics error: {e}")
+        return jsonify({"error": "Failed to load metrics"}), 500
+
+
+@app.route('/api/admin/users', methods=['GET'])
+@admin_required
+def admin_users():
+    """Paginated list of users for the admin dashboard."""
+    if not engine:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    try:
+        limit = request.args.get('limit', 50, type=int)
+        limit = max(1, min(limit, 200))
+        search = request.args.get('search', '').strip().lower()
+        
+        base_sql = """
+            SELECT 
+                user_id,
+                first_name,
+                last_name,
+                email,
+                phone_number,
+                is_active,
+                created_at,
+                last_login
+            FROM users
+        """
+        params = {"limit": limit}
+        filters = []
+        
+        if search:
+            filters.append("(LOWER(email) LIKE :search OR LOWER(first_name) LIKE :search OR LOWER(last_name) LIKE :search)")
+            params["search"] = f"%{search}%"
+        
+        if filters:
+            base_sql += " WHERE " + " AND ".join(filters)
+        
+        base_sql += " ORDER BY created_at DESC LIMIT :limit"
+        
+        with engine.connect() as conn:
+            rows = conn.execute(text(base_sql), params).mappings().all()
+        
+        users = [{
+            "user_id": row["user_id"],
+            "first_name": row["first_name"],
+            "last_name": row["last_name"],
+            "email": row["email"],
+            "phone_number": row["phone_number"],
+            "is_active": row["is_active"],
+            "created_at": row["created_at"].isoformat() if row["created_at"] else None,
+            "last_login": row["last_login"].isoformat() if row["last_login"] else None
+        } for row in rows]
+        
+        return jsonify({"users": users})
+    except Exception as e:
+        logger.error(f"Admin user list error: {e}")
+        return jsonify({"error": "Failed to load users"}), 500
+
+
+@app.route('/api/admin/users/<int:user_id>/status', methods=['PATCH'])
+@admin_required
+def admin_toggle_user_status(user_id):
+    """Enable or disable a user account."""
+    if not engine:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    data = request.get_json() or {}
+    if "is_active" not in data:
+        return jsonify({"error": "is_active flag required"}), 400
+    
+    new_status = bool(data["is_active"])
+    
+    try:
+        with engine.begin() as conn:
+            result = conn.execute(text("""
+                UPDATE users
+                SET is_active = :status
+                WHERE user_id = :user_id
+            """), {"status": new_status, "user_id": user_id})
+        
+        if result.rowcount == 0:
+            return jsonify({"error": "User not found"}), 404
+        
+        return jsonify({"success": True, "user_id": user_id, "is_active": new_status})
+    except Exception as e:
+        logger.error(f"Admin update user error: {e}")
+        return jsonify({"error": "Failed to update user status"}), 500
+
+
+def parse_time_string(value):
+    """Parse a HH:MM or HH:MM:SS string into a time object."""
+    if not value or not isinstance(value, str):
+        return None
+    value = value.strip()
+    for fmt in ("%H:%M", "%H:%M:%S"):
+        try:
+            return datetime.strptime(value, fmt).time()
+        except ValueError:
+            continue
+    return None
+
+
+def parse_date_string(value):
+    """Parse YYYY-MM-DD date strings."""
+    if not value or not isinstance(value, str):
+        return None
+    value = value.strip()
+    try:
+        return datetime.strptime(value, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+@app.route('/api/admin/stations')
+@admin_required
+def admin_station_search():
+    """Search stations for autocomplete (admin only)."""
+    if not engine:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    query_text = request.args.get('search', '').strip()
+    limit = request.args.get('limit', 8, type=int)
+    limit = max(1, min(limit, 25))
+    
+    if len(query_text) < 2:
+        return jsonify({"stations": []})
+    
+    sql = text("""
+        SELECT station_id, station_name
+        FROM stations
+        WHERE station_name ILIKE :search
+        ORDER BY station_name ASC
+        LIMIT :limit
+    """)
+    
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(sql, {"search": f"%{query_text}%", "limit": limit}).fetchall()
+        
+        stations = [{
+            "station_id": row[0],
+            "station_name": row[1]
+        } for row in rows]
+        return jsonify({"stations": stations})
+    except Exception as e:
+        logger.error(f"Admin station search error: {e}")
+        return jsonify({"error": "Failed to search stations"}), 500
+
+
+@app.route('/api/admin/routes', methods=['POST'])
+@admin_required
+def admin_create_route():
+    """Create a new route entry."""
+    if not engine:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    data = request.get_json() or {}
+    route_code = (data.get('route_code') or '').strip().upper()
+    if not route_code:
+        return jsonify({"error": "route_code is required"}), 400
+
+    try:
+        source_id = int(data.get('source_station_id', 0))
+        destination_id = int(data.get('destination_station_id', 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "Station IDs must be integers"}), 400
+    
+    transport_type = (data.get('transport_type') or '').strip().lower()
+    distance_km = data.get('distance_km')
+    
+    if source_id <= 0 or destination_id <= 0:
+        return jsonify({"error": "Valid station IDs are required"}), 400
+    if source_id == destination_id:
+        return jsonify({"error": "Source and destination must be different"}), 400
+    if transport_type not in {'bus', 'train'}:
+        return jsonify({"error": "transport_type must be 'bus' or 'train'"}), 400
+    try:
+        distance_km = float(distance_km)
+    except (TypeError, ValueError):
+        return jsonify({"error": "distance_km must be numeric"}), 400
+    if distance_km <= 0:
+        return jsonify({"error": "distance_km must be positive"}), 400
+    
+    try:
+        with engine.begin() as conn:
+            station_exists = conn.execute(text("""
+                SELECT station_id FROM stations WHERE station_id IN (:src, :dst)
+            """), {"src": source_id, "dst": destination_id}).fetchall()
+            if len(station_exists) != 2:
+                return jsonify({"error": "One or both station IDs do not exist"}), 400
+            
+            duplicate = conn.execute(text("""
+                SELECT route_id FROM routes 
+                WHERE source_station_id = :src AND destination_station_id = :dst 
+                AND transport_type = :transport_type
+            """), {"src": source_id, "dst": destination_id, "transport_type": transport_type}).fetchone()
+            if duplicate:
+                return jsonify({"error": "Route already exists for this transport type"}), 400
+            
+            duplicate_code = conn.execute(text("""
+                SELECT route_id FROM routes WHERE route_code = :code
+            """), {"code": route_code}).fetchone()
+            if duplicate_code:
+                return jsonify({"error": "Route code already in use"}), 400
+            
+            result = conn.execute(text("""
+                INSERT INTO routes (source_station_id, destination_station_id, transport_type, distance_km, route_code)
+                VALUES (:src, :dst, :transport_type, :distance, :code)
+                RETURNING route_id
+            """), {
+                "src": source_id,
+                "dst": destination_id,
+                "transport_type": transport_type,
+                "distance": distance_km,
+                "code": route_code
+            }).fetchone()
+        
+        return jsonify({"success": True, "route_id": result[0]})
+    except Exception as e:
+        logger.error(f"Admin create route error: {e}")
+        return jsonify({"error": "Failed to create route"}), 500
+
+
+@app.route('/api/admin/routes/search')
+@admin_required
+def admin_route_search():
+    """Search routes for schedule creation."""
+    if not engine:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    query_text = request.args.get('search', '').strip()
+    limit = request.args.get('limit', 10, type=int)
+    limit = max(1, min(limit, 25))
+    
+    if len(query_text) < 2:
+        return jsonify({"routes": []})
+    
+    sql = text("""
+        SELECT 
+            r.route_id,
+            r.route_code,
+            r.transport_type,
+            r.distance_km,
+            src.station_name AS source_name,
+            dst.station_name AS destination_name
+        FROM routes r
+        JOIN stations src ON r.source_station_id = src.station_id
+        JOIN stations dst ON r.destination_station_id = dst.station_id
+        WHERE src.station_name ILIKE :term
+           OR dst.station_name ILIKE :term
+           OR r.route_code ILIKE :term
+        ORDER BY r.route_code NULLS LAST, r.route_id
+        LIMIT :limit
+    """)
+    
+    try:
+        with engine.connect() as conn:
+            rows = conn.execute(sql, {"term": f"%{query_text}%", "limit": limit}).fetchall()
+        
+        routes = [{
+            "route_id": row[0],
+            "route_code": row[1],
+            "transport_type": row[2],
+            "distance_km": float(row[3]) if row[3] is not None else None,
+            "source": row[4],
+            "destination": row[5]
+        } for row in rows]
+        return jsonify({"routes": routes})
+    except Exception as e:
+        logger.error(f"Admin route search error: {e}")
+        return jsonify({"error": "Failed to search routes"}), 500
+
+
+@app.route('/api/admin/schedules', methods=['POST'])
+@admin_required
+def admin_create_schedule():
+    """Create a new schedule for a route."""
+    if not engine:
+        return jsonify({"error": "Database not connected"}), 500
+    
+    data = request.get_json() or {}
+    
+    try:
+        route_id = int(data.get('route_id', 0))
+    except (TypeError, ValueError):
+        return jsonify({"error": "route_id must be an integer"}), 400
+    
+    operator = (data.get('operator') or '').strip()
+    departure_time_str = data.get('departure_time')
+    arrival_time_str = data.get('arrival_time')
+    days_of_week = (data.get('days_of_week') or 'Daily').strip()
+    
+    if route_id <= 0:
+        return jsonify({"error": "Valid route_id required"}), 400
+    if not operator:
+        return jsonify({"error": "operator is required"}), 400
+    
+    departure_time = parse_time_string(departure_time_str)
+    arrival_time = parse_time_string(arrival_time_str)
+    if not departure_time or not arrival_time:
+        return jsonify({"error": "departure_time and arrival_time must be HH:MM format"}), 400
+    
+    availability_date = parse_date_string(data.get('availability_date'))
+    seats_total = data.get('seats_total')
+    seats_booked = data.get('seats_booked')
+    
+    if seats_total is not None:
+        try:
+            seats_total = int(seats_total)
+        except (TypeError, ValueError):
+            return jsonify({"error": "seats_total must be an integer"}), 400
+    else:
+        seats_total = 40
+    
+    if seats_booked is not None:
+        try:
+            seats_booked = int(seats_booked)
+        except (TypeError, ValueError):
+            return jsonify({"error": "seats_booked must be an integer"}), 400
+    else:
+        seats_booked = 0
+    
+    if seats_total < 0 or seats_booked < 0:
+        return jsonify({"error": "Seat counts must be non-negative"}), 400
+    if seats_booked > seats_total:
+        return jsonify({"error": "seats_booked cannot exceed seats_total"}), 400
+    
+    try:
+        with engine.begin() as conn:
+            route_exists = conn.execute(text("""
+                SELECT route_id FROM routes WHERE route_id = :route_id
+            """), {"route_id": route_id}).fetchone()
+            if not route_exists:
+                return jsonify({"error": "Route not found"}), 404
+            
+            result = conn.execute(text("""
+                INSERT INTO schedules (route_id, operator, departure_time, arrival_time, days_of_week)
+                VALUES (:route_id, :operator, :departure_time, :arrival_time, :days_of_week)
+                RETURNING schedule_id
+            """), {
+                "route_id": route_id,
+                "operator": operator,
+                "departure_time": departure_time,
+                "arrival_time": arrival_time,
+                "days_of_week": days_of_week or 'Daily'
+            }).fetchone()
+            
+            availability_id = None
+            if availability_date:
+                availability_result = conn.execute(text("""
+                    INSERT INTO availability (schedule_id, travel_date, seats_total, seats_booked)
+                    VALUES (:schedule_id, :travel_date, :seats_total, :seats_booked)
+                    RETURNING availability_id
+                """), {
+                    "schedule_id": result[0],
+                    "travel_date": availability_date,
+                    "seats_total": seats_total,
+                    "seats_booked": seats_booked
+                }).fetchone()
+                availability_id = availability_result[0]
+        
+        return jsonify({"success": True, "schedule_id": result[0], "availability_id": availability_id})
+    except Exception as e:
+        logger.error(f"Admin create schedule error: {e}")
+        return jsonify({"error": "Failed to create schedule"}), 500
 
 
 @app.route('/')
@@ -136,9 +622,15 @@ def home():
         return redirect(url_for('login'))
     
     try:
-        return render_template('index.html')
+        return render_template('index.html', is_admin=is_admin_user(), user_name=session.get('name', session.get('email')))
     except Exception:
         return "Voice-Based Transport Enquiry System Running! (No template found)", 200
+
+@app.route('/admin')
+@admin_required
+def admin_dashboard():
+    return render_template('admin.html', user_name=session.get('name', session.get('email')))
+
 
 @app.route('/api/health')
 def health_check():

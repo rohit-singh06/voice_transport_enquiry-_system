@@ -21,24 +21,92 @@
   <nav class="top-nav">
     <div class="nav-left">
       <span class="brand-icon">🚌</span>
-      <span class="brand-text">Smart Transport</span>
+      <div class="brand-stack">
+        <span class="brand-text">Smart Transport</span>
+        <span class="brand-subtext">Voice • Realtime • Insights</span>
+      </div>
     </div>
     <div class="nav-right">
-  <a class="nav-btn" href="#search">🔍 Search</a>
-  <a class="nav-btn" id="help-btn" href="#">❓ Help</a>
-
-  <a class="nav-btn" id="bookmark-link" href="#bookmarks" title="Bookmarks">⭐ Bookmarks</a>
-  <a class="nav-btn logout" href="/logout">🚪 Logout</a>
-</div>
-
+      <a class="nav-item" href="#search">
+        <span class="nav-icon">🔍</span> Search
+      </a>
+      <a class="nav-item" id="help-btn" href="#">
+        <span class="nav-icon">❓</span> Help
+      </a>
+      {% if is_admin %}
+      <a class="nav-item" href="{{ url_for('admin_dashboard') }}">
+        <span class="nav-icon">🛠</span> Admin
+      </a>
+      {% endif %}
+      <a class="nav-item" id="bookmark-link" href="#bookmarks" title="Bookmarks">
+        <span class="nav-icon">⭐</span> Bookmarks
+      </a>
+      <a class="nav-item logout" href="/logout">
+        <span class="nav-icon">🚪</span> Logout
+      </a>
+      <div class="user-pill">
+        <span class="user-avatar">👤</span>
+        <div>
+          <p class="user-name">{{ user_name or 'Traveler' }}</p>
+          <p class="user-role">{{ 'Admin' if is_admin else 'Explorer' }}</p>
+        </div>
+      </div>
+    </div>
   </nav>
 
   <!-- main app -->
   <main class="app-container">
+    <section class="status-strip">
+      <article class="status-pill">
+        <span class="pill-icon">🕒</span>
+        <div>
+          <p class="pill-label">Local Time</p>
+          <p class="pill-value" id="status-time">--:--</p>
+        </div>
+      </article>
+      <article class="status-pill">
+        <span class="pill-icon">📅</span>
+        <div>
+          <p class="pill-label">Today</p>
+          <p class="pill-value" id="status-date">--</p>
+        </div>
+      </article>
+      <article class="status-pill">
+        <span class="pill-icon">📶</span>
+        <div>
+          <p class="pill-label">Network</p>
+          <p class="pill-value" id="status-network">Checking…</p>
+        </div>
+      </article>
+    </section>
     <header class="app-header">
       <h1><span class="title-icon">🚌</span><span class="title-text">Smart Transport Finder</span></h1>
-      <p class="subtitle">Voice-based transport enquiry • Real-time schedules & fares</p>
+      <p class="subtitle">Voice-based transport enquiry </p>
     </header>
+
+    <section class="insight-grid">
+      <article class="insight-card">
+        <div class="insight-icon">🎧</div>
+        <div>
+          <p class="insight-label">Voice Ready</p>
+          <p class="insight-value">Say “Next bus from Jaipur”</p>
+        </div>
+      </article>
+      <article class="insight-card">
+        <div class="insight-icon">📡</div>
+        <div>
+          <p class="insight-label">Live Availability</p>
+          <p class="insight-value">Seats updated every request</p>
+        </div>
+      </article>
+      <article class="insight-card">
+        <div class="insight-icon">💰</div>
+        <div>
+          <p class="insight-label">Dynamic Fares</p>
+          <p class="insight-value">Based on operator + demand</p>
+        </div>
+      </article>
+    </section>
 
     <section class="controls glass-card" id="search">
       <div class="controls-row">
@@ -104,6 +172,36 @@
 
       <!-- voice hint -->
       <div id="voice-hint" class="voice-hint hidden">Say: "Bus from Mumbai to Delhi"</div>
+
+      <div class="chip-row">
+        <button class="quick-chip" data-src="Dehradun" data-dst="Delhi" data-type="bus">🚌 Dehradun ➜ Delhi</button>
+        <button class="quick-chip" data-src="Mumbai" data-dst="Pune" data-type="train">🚆 Mumbai ➜ Pune</button>
+        <button class="quick-chip" data-src="Bengaluru" data-dst="Chennai" data-type="">⚡ Evening Express</button>
+        <button class="quick-chip" data-src="Jaipur" data-dst="Kota" data-type="bus">🕘 Next Bus</button>
+      </div>
+      <div class="scenario-badges">
+        <button class="scenario-chip" data-src="Delhi" data-dst="Chandigarh" data-type="bus" data-tag="morning">
+          <span>🌅 Morning Rush</span>
+          <small>Earliest departures</small>
+        </button>
+        <button class="scenario-chip" data-src="Hyderabad" data-dst="Goa" data-type="" data-tag="weekend">
+          <span>🎉 Weekend Escape</span>
+          <small>Sleeper & AC coaches</small>
+        </button>
+        <button class="scenario-chip" data-src="Lucknow" data-dst="Kanpur" data-type="train" data-tag="budget">
+          <span>💸 Budget Saver</span>
+          <small>Lowest fare first</small>
+        </button>
+      </div>
+    </section>
+
+    <section class="assistant-banner">
+      <div class="assistant-icon">🤖</div>
+      <div class="assistant-copy">
+        <p class="assistant-title">Tip</p>
+        <p class="assistant-text">Hold spacebar to start voice input anytime.</p>
+      </div>
+      <button class="assistant-action" id="assistant-help">See Commands</button>
     </section>
 
     <!-- results -->
@@ -205,6 +303,14 @@
   </aside>
 </div>
 
+
+<!-- Floating toolbelt -->
+<div class="floating-toolbelt">
+  <button class="toolbelt-btn" data-action="voice" title="Start voice search">🎙️</button>
+  <button class="toolbelt-btn" data-action="history" title="Recent searches">🕓</button>
+  <button class="toolbelt-btn" data-action="bookmarks" title="View bookmarks">⭐</button>
+  <button class="toolbelt-btn" data-action="help" title="Help & commands">❓</button>
+</div>
 
 <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>

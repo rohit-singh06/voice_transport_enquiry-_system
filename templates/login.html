@@ -17,25 +17,27 @@
   <!-- Glass Login Container -->
   <div class="login-container">
     <div class="login-card" id="login-card">
-     <h1><span class="title-icon">🚌</span> <span class="title-text">Smart Transport Finder</span></h1>
+      <div class="login-toggle">
+        <button class="toggle-option active" data-role="user">User Login</button>
+        <button class="toggle-option" data-role="admin">Admin Login</button>
+      </div>
 
+      <h1><span class="title-icon">🚌</span> <span class="title-text">Smart Transport Finder</span></h1>
       <p class="subtitle">Voice-Based Transport Enquiry System</p>
 
       <form id="login-form" action="/login" method="POST" class="login-form">
-        <!-- Username -->
         <div class="input-group">
-          <label for="username">👤 Username</label>
+          <label for="username">👤 Email</label>
           <input
-            type="text"
+            type="email"
             id="username"
             name="username"
             required
-            placeholder="Enter your username"
+            placeholder="Enter your email"
             autocomplete="off"
           />
         </div>
 
-        <!-- Password -->
         <div class="input-group password-group">
           <label for="password">🔒 Password</label>
           <input
@@ -46,24 +48,21 @@
             placeholder="Enter your password"
             autocomplete="off"
           />
-          <span id="toggle-password" class="toggle-password">👁️</span>
+          <span class="toggle-password" data-target="password">👁️</span>
         </div>
 
-        <!-- Remember Me -->
         <div class="remember-me">
           <input type="checkbox" id="remember" />
           <label for="remember">Remember Me</label>
         </div>
 
-        <!-- Login Button -->
-        <button type="submit" class="login-btn">Login</button>
+        <button type="submit" class="login-btn" id="login-submit">Login</button>
+        <small class="admin-hint" id="login-hint">Standard user access</small>
       </form>
 
-      <!-- Footer Links -->
       <div class="footer-links">
         <a href="#" class="link">Forgot Password?</a>
         <a href="#" id="create-account-link" class="link">Create Account</a>
-
       </div>
     </div>
   </div>
@@ -73,7 +72,7 @@
     <div class="success-message">
       <span class="checkmark">✅</span>
       <h2>Login Successful!</h2>
-      <p>Redirecting to dashboard...</p>
+      <p id="success-message-text">Redirecting to dashboard...</p>
     </div>
   </div>
 

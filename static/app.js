@@ -3,32 +3,8 @@ const el = id => document.getElementById(id);
 
 // Language support
 let currentLanguage = localStorage.getItem('transport_language') || 'en';
-const languageSelect = el('language-select');
-if (languageSelect) {
-  languageSelect.value = currentLanguage;
-  languageSelect.addEventListener('change', (e) => {
-    currentLanguage = e.target.value;
-    localStorage.setItem('transport_language', currentLanguage);
-    updateLanguageUI();
-    // Update recognition language
-    if (recognition) {
-      recognition.lang = currentLanguage === 'hi' ? 'hi-IN' : 'en-IN';
-    }
-  });
-}
 
-// Update UI based on language
-function updateLanguageUI() {
-  if (currentLanguage === 'hi') {
-    voiceHint.textContent = 'सुन रहे हैं... कहें: "दिल्ली से मुंबई बस"';
-    el('voice-label').textContent = 'आवाज़';
-  } else {
-    voiceHint.textContent = 'Say: "Bus from Mumbai to Delhi"';
-    el('voice-label').textContent = 'Voice';
-  }
-}
-
-// Elements
+// Elements (define first)
 const searchBtn = el('search-btn');
 const voiceBtn = el('voice-btn');
 const micIcon = el('mic-icon');
@@ -39,9 +15,316 @@ const historyPanel = document.getElementById('history-panel');
 const historyList = document.getElementById('history-list');
 const closeHistory = document.getElementById('close-history');
 const searchLoading = document.getElementById('search-loading');
+const quickChips = document.querySelectorAll('.quick-chip');
+const assistantHelp = document.getElementById('assistant-help');
+const statusTimeEl = document.getElementById('status-time');
+const statusDateEl = document.getElementById('status-date');
+const statusNetworkEl = document.getElementById('status-network');
+const toolbeltButtons = document.querySelectorAll('.toolbelt-btn');
+const languageSelect = el('language-select');
 
-// Initialize language UI
-updateLanguageUI();
+// Hindi translations
+const translations = {
+  en: {
+    from: 'From',
+    to: 'To',
+    type: 'Type',
+    date: 'Date',
+    all: 'All',
+    bus: 'Bus',
+    train: 'Train',
+    searchTransport: 'Search Transport',
+    voice: 'Voice',
+    recent: 'Recent',
+    voiceHint: 'Say: "Bus from Mumbai to Delhi"',
+    listening: 'Listening... say: "Bus from X to Y"',
+    voiceReady: 'Voice Ready',
+    voiceReadyDesc: 'Say "Next bus from Jaipur"',
+    liveAvailability: 'Live Availability',
+    liveAvailabilityDesc: 'Seats updated every request',
+    dynamicFares: 'Dynamic Fares',
+    dynamicFaresDesc: 'Based on operator + demand',
+    tip: 'Tip',
+    tipText: 'Hold spacebar to start voice input anytime.',
+    seeCommands: 'See Commands',
+    details: 'Details',
+    bookNow: 'Book Now',
+    save: 'Save',
+    saved: 'Saved',
+    noResults: 'No Results',
+    tryDifferent: 'Try different filters or use voice search.',
+    enterSource: 'Enter source (city, station)',
+    enterDestination: 'Enter destination'
+  },
+  hi: {
+    from: 'से',
+    to: 'तक',
+    type: 'प्रकार',
+    date: 'तारीख',
+    all: 'सभी',
+    bus: 'बस',
+    train: 'ट्रेन',
+    searchTransport: 'यातायात खोजें',
+    voice: 'आवाज़',
+    recent: 'हाल की',
+    voiceHint: 'कहें: "दिल्ली से मुंबई बस"',
+    listening: 'सुन रहे हैं... कहें: "X से Y बस"',
+    voiceReady: 'आवाज़ तैयार',
+    voiceReadyDesc: 'कहें "जयपुर से अगली बस"',
+    liveAvailability: 'लाइव उपलब्धता',
+    liveAvailabilityDesc: 'हर अनुरोध पर सीटें अपडेट',
+    dynamicFares: 'गतिशील किराया',
+    dynamicFaresDesc: 'ऑपरेटर + मांग के आधार पर',
+    tip: 'सुझाव',
+    tipText: 'कभी भी आवाज़ इनपुट शुरू करने के लिए स्पेसबार दबाएं।',
+    seeCommands: 'कमांड देखें',
+    details: 'विवरण',
+    bookNow: 'अभी बुक करें',
+    save: 'सहेजें',
+    saved: 'सहेजा गया',
+    noResults: 'कोई परिणाम नहीं',
+    tryDifferent: 'अलग फ़िल्टर आज़माएं या आवाज़ खोज का उपयोग करें।',
+    enterSource: 'स्रोत दर्ज करें (शहर, स्टेशन)',
+    enterDestination: 'गंतव्य दर्ज करें'
+  }
+};
+
+// Hindi to English city name mapping
+const cityNameMapping = {
+  // Major cities
+  'दिल्ली': 'Delhi',
+  'देहरादून': 'Dehradun',
+  'मुंबई': 'Mumbai',
+  'बॉम्बे': 'Mumbai',
+  'पुणे': 'Pune',
+  'बेंगलुरु': 'Bangalore',
+  'बैंगलोर': 'Bangalore',
+  'चेन्नई': 'Chennai',
+  'मद्रास': 'Chennai',
+  'कोलकाता': 'Kolkata',
+  'कलकत्ता': 'Kolkata',
+  'हैदराबाद': 'Hyderabad',
+  'अहमदाबाद': 'Ahmedabad',
+  'जयपुर': 'Jaipur',
+  'सूरत': 'Surat',
+  'लखनऊ': 'Lucknow',
+  'कानपुर': 'Kanpur',
+  'नागपुर': 'Nagpur',
+  'इंदौर': 'Indore',
+  'थाणे': 'Thane',
+  'भोपाल': 'Bhopal',
+  'विशाखापत्तनम': 'Visakhapatnam',
+  'पटना': 'Patna',
+  'वडोदरा': 'Vadodara',
+  'गाजियाबाद': 'Ghaziabad',
+  'लुधियाना': 'Ludhiana',
+  'कोयंबटूर': 'Coimbatore',
+  'आगरा': 'Agra',
+  'मदुरै': 'Madurai',
+  'नाशिक': 'Nashik',
+  'मेरठ': 'Meerut',
+  'राजकोट': 'Rajkot',
+  'वाराणसी': 'Varanasi',
+  'बनारस': 'Varanasi',
+  'श्रीनगर': 'Srinagar',
+  'अमृतसर': 'Amritsar',
+  'जोधपुर': 'Jodhpur',
+  'रांची': 'Ranchi',
+  'रायपुर': 'Raipur',
+  'कोच्चि': 'Kochi',
+  'कोचीन': 'Kochi',
+  'चंडीगढ़': 'Chandigarh',
+  'गुवाहाटी': 'Guwahati',
+  'सोलापुर': 'Solapur',
+  'हुबली': 'Hubli',
+  'मैसूर': 'Mysore',
+  'तिरुवनंतपुरम': 'Thiruvananthapuram',
+  'तिरुचिरापल्ली': 'Tiruchirappalli',
+  'कोटा': 'Kota',
+  'जमशेदपुर': 'Jamshedpur',
+  'अलीगढ़': 'Aligarh',
+  'बरेली': 'Bareilly',
+  'गोरखपुर': 'Gorakhpur',
+  'मुरादाबाद': 'Moradabad',
+  'जलंधर': 'Jalandhar',
+  'अमरावती': 'Amravati',
+  'नोएडा': 'Noida',
+  'ग्रेटर नोएडा': 'Greater Noida',
+  'गुरुग्राम': 'Gurgaon',
+  'फरीदाबाद': 'Faridabad',
+  'गाजियाबाद': 'Ghaziabad',
+  'शिमला': 'Shimla',
+  'मनाली': 'Manali',
+  'हरिद्वार': 'Haridwar',
+  'ऋषिकेश': 'Rishikesh',
+  'मसूरी': 'Mussoorie',
+  'नैनीताल': 'Nainital',
+  'अल्मोड़ा': 'Almora',
+  'रानीखेत': 'Ranikhet',
+  'कुल्लू': 'Kullu',
+  'सोलन': 'Solan',
+  'धर्मशाला': 'Dharamshala',
+  'मक्लोडगंज': 'McLeod Ganj',
+  'दार्जिलिंग': 'Darjeeling',
+  'गंगटोक': 'Gangtok',
+  'कालिम्पोंग': 'Kalimpong',
+  'उदयपुर': 'Udaipur',
+  'माउंट आबू': 'Mount Abu',
+  'जैसलमेर': 'Jaisalmer',
+  'बीकानेर': 'Bikaner',
+  'अजमेर': 'Ajmer',
+  'पुष्कर': 'Pushkar',
+  'चित्तौड़गढ़': 'Chittorgarh',
+  'बूंदी': 'Bundi',
+  'कोटा': 'Kota',
+  'भरतपुर': 'Bharatpur',
+  'अलवर': 'Alwar',
+  'सीकर': 'Sikar',
+  'झुंझुनू': 'Jhunjhunu',
+  'चूरू': 'Churu',
+  'नागौर': 'Nagaur',
+  'पाली': 'Pali',
+  'बाड़मेर': 'Barmer',
+  'जालौर': 'Jalore',
+  'सिरोही': 'Sirohi',
+  'प्रतापगढ़': 'Pratapgarh',
+  'बांसवाड़ा': 'Banswara',
+  'डूंगरपुर': 'Dungarpur',
+  'बारां': 'Baran',
+  'कोटा': 'Kota',
+  'झालावाड़': 'Jhalawar',
+  'बूंदी': 'Bundi',
+  'सवाई माधोपुर': 'Sawai Madhopur',
+  'करौली': 'Karauli',
+  'धौलपुर': 'Dholpur'
+};
+
+// Function to convert Hindi city name to English
+function convertHindiToEnglishCityName(hindiName) {
+  if (!hindiName) return hindiName;
+  
+  const trimmed = hindiName.trim();
+  
+  // Direct mapping lookup
+  if (cityNameMapping[trimmed]) {
+    return cityNameMapping[trimmed];
+  }
+  
+  // Case-insensitive lookup
+  const lowerTrimmed = trimmed.toLowerCase();
+  for (const [hindi, english] of Object.entries(cityNameMapping)) {
+    if (hindi.toLowerCase() === lowerTrimmed) {
+      return english;
+    }
+  }
+  
+  // If no mapping found, return original (might already be in English or transliterated)
+  return trimmed;
+}
+
+// Update UI based on language
+function updateLanguageUI() {
+  if (!voiceHint) return; // Safety check
+  
+  const t = translations[currentLanguage];
+  
+  // Voice hint and label
+  if (voiceHint) {
+    voiceHint.textContent = t.voiceHint;
+  }
+  const voiceLabel = el('voice-label');
+  if (voiceLabel) {
+    voiceLabel.textContent = t.voice;
+  }
+  
+  // Form labels
+  const fromLabel = document.querySelector('label[for="source"]');
+  if (fromLabel) fromLabel.textContent = `📍 ${t.from}`;
+  
+  const toLabel = document.querySelector('label[for="destination"]');
+  if (toLabel) toLabel.textContent = `🎯 ${t.to}`;
+  
+  const typeLabel = document.querySelector('label[for="transport-type"]');
+  if (typeLabel) typeLabel.textContent = `🚌 ${t.type}`;
+  
+  const dateLabel = document.querySelector('label[for="date"]');
+  if (dateLabel) dateLabel.textContent = `📅 ${t.date}`;
+  
+  // Placeholders
+  const sourceInput = el('source');
+  if (sourceInput) sourceInput.placeholder = t.enterSource;
+  
+  const destInput = el('destination');
+  if (destInput) destInput.placeholder = t.enterDestination;
+  
+  // Select options
+  const transportSelect = el('transport-type');
+  if (transportSelect) {
+    transportSelect.options[0].text = t.all;
+    transportSelect.options[1].text = t.bus;
+    transportSelect.options[2].text = t.train;
+  }
+  
+  // Buttons
+  if (searchBtn) {
+    const searchBtnSpans = searchBtn.querySelectorAll('span');
+    searchBtnSpans.forEach(span => {
+      if (!span.classList.contains('btn-icon') && !span.classList.contains('loading') && 
+          (span.textContent.includes('Search') || span.textContent.includes('खोजें'))) {
+        span.textContent = t.searchTransport;
+      }
+    });
+  }
+  
+  const historyBtnEl = el('history-btn');
+  if (historyBtnEl) {
+    historyBtnEl.innerHTML = `🕓 ${t.recent}`;
+  }
+  
+  // Insight cards
+  const insightLabels = document.querySelectorAll('.insight-label');
+  const insightValues = document.querySelectorAll('.insight-value');
+  if (insightLabels.length >= 3 && insightValues.length >= 3) {
+    insightLabels[0].textContent = t.voiceReady;
+    insightValues[0].textContent = t.voiceReadyDesc;
+    insightLabels[1].textContent = t.liveAvailability;
+    insightValues[1].textContent = t.liveAvailabilityDesc;
+    insightLabels[2].textContent = t.dynamicFares;
+    insightValues[2].textContent = t.dynamicFaresDesc;
+  }
+  
+  // Assistant banner
+  const assistantTitle = document.querySelector('.assistant-title');
+  const assistantText = document.querySelector('.assistant-text');
+  const assistantAction = el('assistant-help');
+  if (assistantTitle) assistantTitle.textContent = t.tip;
+  if (assistantText) assistantText.textContent = t.tipText;
+  if (assistantAction) assistantAction.textContent = t.seeCommands;
+  
+  // Update voice recognition language
+  if (recognition) {
+    recognition.lang = currentLanguage === 'hi' ? 'hi-IN' : 'en-IN';
+  }
+}
+
+// Language selector
+if (languageSelect) {
+  languageSelect.value = currentLanguage;
+  languageSelect.addEventListener('change', (e) => {
+    currentLanguage = e.target.value;
+    localStorage.setItem('transport_language', currentLanguage);
+    updateLanguageUI();
+  });
+}
+
+// Initialize language UI after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', () => {
+    updateLanguageUI();
+  });
+} else {
+  updateLanguageUI();
+}
 
 // Save / load recent searches (localStorage)
 function saveSearchHistory(src, dst, type='') {
@@ -106,6 +389,49 @@ document.addEventListener('click', (e) => {
     setTimeout(() => historyPanel.classList.add('hidden'), 300);
   }
 });
+
+quickChips.forEach((chip) => {
+  chip.addEventListener('click', () => {
+    const src = chip.dataset.src || '';
+    const dst = chip.dataset.dst || '';
+    const type = chip.dataset.type || '';
+    if (src) el('source').value = src;
+    if (dst) el('destination').value = dst;
+    if (type !== undefined) el('transport-type').value = type;
+    doSearch();
+  });
+});
+const scenarioChips = document.querySelectorAll('.scenario-chip');
+scenarioChips.forEach((chip) => {
+  chip.addEventListener('click', () => {
+    const src = chip.dataset.src || '';
+    const dst = chip.dataset.dst || '';
+    const type = chip.dataset.type || '';
+    if (src) el('source').value = src;
+    if (dst) el('destination').value = dst;
+    if (type !== undefined) el('transport-type').value = type;
+    doSearch();
+  });
+});
+
+function updateStatusMeta() {
+  const now = new Date();
+  if (statusTimeEl) {
+    statusTimeEl.textContent = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  if (statusDateEl) {
+    statusDateEl.textContent = now.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  }
+  if (statusNetworkEl) {
+    const online = navigator.onLine;
+    statusNetworkEl.textContent = online ? 'Online' : 'Offline';
+    statusNetworkEl.classList.toggle('offline', !online);
+  }
+}
+updateStatusMeta();
+setInterval(updateStatusMeta, 15000);
+window.addEventListener('online', updateStatusMeta);
+window.addEventListener('offline', updateStatusMeta);
 // Simple speak helper with language support
 function speak(text){
   if(!window.speechSynthesis || !text) return;
@@ -119,14 +445,27 @@ function speak(text){
 
 // Build parameters and call backend
 async function doSearch(){
-  const src = el('source').value.trim();
-  const dst = el('destination').value.trim();
+  let src = el('source').value.trim();
+  let dst = el('destination').value.trim();
   const type = el('transport-type').value;
   const date = el('date').value;
   if(!src || !dst){
-    speak('Please provide both source and destination');
-    alert('Please enter both source and destination');
+    const t = translations[currentLanguage];
+    speak(currentLanguage === 'hi' ? 'कृपया स्रोत और गंतव्य दोनों दर्ज करें' : 'Please provide both source and destination');
+    alert(currentLanguage === 'hi' ? 'कृपया स्रोत और गंतव्य दोनों दर्ज करें' : 'Please enter both source and destination');
     return;
+  }
+
+  // Convert Hindi city names to English for database search
+  const srcEnglish = convertHindiToEnglishCityName(src);
+  const dstEnglish = convertHindiToEnglishCityName(dst);
+  
+  // Update form fields with English names (for display consistency)
+  if (srcEnglish !== src) {
+    el('source').value = srcEnglish;
+  }
+  if (dstEnglish !== dst) {
+    el('destination').value = dstEnglish;
   }
 
   // UI: loading
@@ -134,11 +473,11 @@ async function doSearch(){
   searchLoading.classList.remove('hidden');
   searchBtn.classList.add('loading');
 
-  // Save to history
-  saveSearchHistory(src, dst, type);
+  // Save to history (save English names for consistency)
+  saveSearchHistory(srcEnglish, dstEnglish, type);
 
   try {
-    const params = new URLSearchParams({ source: src, destination: dst, type, date });
+    const params = new URLSearchParams({ source: srcEnglish, destination: dstEnglish, type, date });
     const res = await fetch('/api/search?' + params.toString());
     if(!res.ok) throw new Error('Network error');
     const data = await res.json();
@@ -149,7 +488,7 @@ async function doSearch(){
       let speechText = '';
       
       if (currentLanguage === 'hi') {
-        speechText = `${data.results.length} ${data.results.length === 1 ? 'विकल्प' : 'विकल्प'} मिले ${src} से ${dst} के लिए`;
+        speechText = `${data.results.length} ${data.results.length === 1 ? 'विकल्प' : 'विकल्प'} मिले ${srcEnglish} से ${dstEnglish} के लिए`;
         if(date) {
           const dateObj = new Date(date + 'T00:00:00');
           const dateStr = dateObj.toLocaleDateString('hi-IN', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -161,7 +500,7 @@ async function doSearch(){
           speechText += `. ${data.results.length - 1} और विकल्प उपलब्ध हैं`;
         }
       } else {
-        speechText = `Found ${data.results.length} ${data.results.length === 1 ? 'option' : 'options'} from ${src} to ${dst}`;
+        speechText = `Found ${data.results.length} ${data.results.length === 1 ? 'option' : 'options'} from ${srcEnglish} to ${dstEnglish}`;
         if(date) {
           const dateObj = new Date(date + 'T00:00:00');
           const dateStr = dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
@@ -194,16 +533,17 @@ async function doSearch(){
 // Render results as glass cards (with universal ID detection)
 function renderResults(data) {
   resultsContainer.innerHTML = '';
+  const t = translations[currentLanguage];
 
   if (!data || !data.results || data.results.length === 0) {
     const no = document.createElement('div');
     no.className = 'result-card';
     no.innerHTML = `
       <div class="result-row">
-        <div class="result-title">No Results</div>
+        <div class="result-title">${t.noResults}</div>
       </div>
       <div style="color:var(--muted);margin-top:8px">
-        Try different filters or use voice search.
+        ${t.tryDifferent}
       </div>`;
     resultsContainer.appendChild(no);
     return;
@@ -241,15 +581,15 @@ function renderResults(data) {
       </div>
 
       <div class="result-buttons">
-        <button class="btn-modern btn-details">Details</button>
-        <button class="btn-modern btn-book">Book Now</button>
+        <button class="btn-modern btn-details">${t.details}</button>
+        <button class="btn-modern btn-book">${t.bookNow}</button>
       </div>
 
       <div style="margin-top:8px;text-align:center;">
   <button class="bookmark-btn"
           data-id="${scheduleId}"
           data-fare="${Number(r.fare || 0)}">
-    ⭐ Save
+    ⭐ ${t.save}
   </button>
 </div>
 
@@ -280,11 +620,8 @@ if('webkitSpeechRecognition' in window || 'SpeechRecognition' in window){
   recognition.onstart = () => {
     micIcon.classList.add('mic-listening');
     voiceHint.classList.remove('hidden');
-    if (currentLanguage === 'hi') {
-      voiceHint.textContent = 'सुन रहे हैं... कहें: "दिल्ली से मुंबई बस"';
-    } else {
-      voiceHint.textContent = 'Listening... say: "Bus from X to Y"';
-    }
+    const t = translations[currentLanguage];
+    voiceHint.textContent = t.listening;
   };
   recognition.onend = () => {
     micIcon.classList.remove('mic-listening');
@@ -309,17 +646,65 @@ if('webkitSpeechRecognition' in window || 'SpeechRecognition' in window){
   let src = '', dst = '';
   
   if (currentLanguage === 'hi') {
-    // Hindi patterns: "दिल्ली से मुंबई", "से दिल्ली तक मुंबई", etc.
-    const hindiFromToMatch = transcript.match(/(?:से|from)\s+([a-z\u0900-\u097F\s]+?)(?:\s+तक|\s+to)\s+([a-z\u0900-\u097F\s]+)/);
-    if (hindiFromToMatch) {
-      src = hindiFromToMatch[1].trim();
-      dst = hindiFromToMatch[2].trim();
+    // Hindi patterns: 
+    // "देहरादून से दिल्ली बस" (X से Y बस)
+    // "दिल्ली से मुंबई तक" (X से Y तक)
+    // "से दिल्ली तक मुंबई" (से X तक Y)
+    
+    console.log('🎤 Hindi transcript:', transcript);
+    
+    // Pattern 1: "X से Y बस/ट्रेन" - most common pattern
+    // Split on "से" and extract source and destination
+    const seIndex = transcript.indexOf('से');
+    if (seIndex >= 0) {
+      if (seIndex > 0) {
+        // "से" is in the middle: "X से Y बस"
+        src = transcript.substring(0, seIndex).trim();
+        let afterSe = transcript.substring(seIndex + 2).trim(); // +2 for "से" (2 chars)
+        
+        // Remove transport type if present at the end
+        afterSe = afterSe.replace(/\s+(बस|ट्रेन|bus|train)$/i, '').trim();
+        // Remove "तक" if present
+        afterSe = afterSe.replace(/\s+तक\s*$/i, '').trim();
+        
+        dst = afterSe;
+        console.log('✅ Pattern 1 matched - src:', src, 'dst:', dst);
+      } else {
+        // "से" is at the start: "से X तक Y" or "से X Y बस"
+        const afterSe = transcript.substring(2).trim(); // Skip "से"
+        const takIndex = afterSe.indexOf('तक');
+        
+        if (takIndex > 0) {
+          // Pattern: "से X तक Y"
+          const parts = afterSe.split('तक');
+          if (parts.length >= 2) {
+            src = parts[0].trim();
+            let dstPart = parts.slice(1).join('तक').trim();
+            // Remove transport type if present
+            dstPart = dstPart.replace(/\s+(बस|ट्रेन|bus|train)$/i, '').trim();
+            dst = dstPart;
+            console.log('✅ Pattern 2 matched (से X तक Y) - src:', src, 'dst:', dst);
+          }
+        } else {
+          // Pattern: "से X Y बस" - take first word as source, rest as destination
+          const words = afterSe.split(/\s+/);
+          if (words.length >= 2) {
+            // Find where transport type starts
+            let destEnd = words.length;
+            for (let i = words.length - 1; i >= 0; i--) {
+              if (/^(बस|ट्रेन|bus|train)$/i.test(words[i])) {
+                destEnd = i;
+                break;
+              }
+            }
+            src = words[0];
+            dst = words.slice(1, destEnd).join(' ').trim();
+            console.log('✅ Pattern 2 matched (से X Y बस) - src:', src, 'dst:', dst);
+          }
+        }
+      }
     } else {
-      // Try separate patterns
-      const hindiFromMatch = transcript.match(/(?:से|from)\s+([a-z\u0900-\u097F\s]+?)(?:\s+तक|\s+to)/);
-      const hindiToMatch = transcript.match(/(?:तक|to)\s+([a-z\u0900-\u097F\s]+?)(?:\s+बस|\s+ट्रेन|\s+bus|\s+train|$)/);
-      if (hindiFromMatch) src = hindiFromMatch[1].trim();
-      if (hindiToMatch) dst = hindiToMatch[1].trim();
+      console.log('❌ No "से" found in Hindi transcript');
     }
   } else {
     // English patterns
@@ -413,21 +798,30 @@ if('webkitSpeechRecognition' in window || 'SpeechRecognition' in window){
 
   // === FILL UI FIELDS ===
   if (src && dst) {
-    el('source').value = capitalize(src);
-    el('destination').value = capitalize(dst);
+    // Convert Hindi city names to English for database search
+    const srcEnglish = convertHindiToEnglishCityName(src);
+    const dstEnglish = convertHindiToEnglishCityName(dst);
+    
+    console.log('🔄 City name conversion:', { 
+      original: { src, dst }, 
+      converted: { srcEnglish, dstEnglish } 
+    });
+    
+    el('source').value = capitalize(srcEnglish);
+    el('destination').value = capitalize(dstEnglish);
     el('transport-type').value = type || '';
     if (date) el('date').value = date;
 
-    // Speak in selected language
+    // Speak in selected language (use original Hindi names for speech)
     if (currentLanguage === 'hi') {
       const transportText = type === 'bus' ? 'बस' : type === 'train' ? 'ट्रेन' : 'यातायात';
       speak(`${src} से ${dst} के लिए ${transportText} खोज रहे हैं` + (date ? ` ${date} को` : ''));
     } else {
-      speak(`Searching ${type || 'transport'} from ${src} to ${dst}` + (date ? ` on ${date}` : ''));
+      speak(`Searching ${type || 'transport'} from ${srcEnglish} to ${dstEnglish}` + (date ? ` on ${date}` : ''));
     }
 
-    // Call backend with parameters
-    doSearchWithParams(src, dst, type, date, start_time, end_time);
+    // Call backend with English city names for database search
+    doSearchWithParams(srcEnglish, dstEnglish, type, date, start_time, end_time);
   } else {
     if (currentLanguage === 'hi') {
       speak("क्षमा करें, मैं रूट समझ नहीं पाया। कृपया फिर से कोशिश करें।");
@@ -541,17 +935,19 @@ document.addEventListener('click', async (e) => {
 
 
     const data = await res.json();
+    const t = translations[currentLanguage];
     if (res.ok && data.success) {
       bookmarkBtn.classList.add('saved');
-      bookmarkBtn.innerHTML = '<span class="icon">💾</span> <span class="text">Saved</span>';
+      bookmarkBtn.innerHTML = `<span class="icon">💾</span> <span class="text">${t.saved}</span>`;
     } else {
-      bookmarkBtn.innerHTML = "⭐ Save";
+      bookmarkBtn.innerHTML = `⭐ ${t.save}`;
       alert(data.error || "Failed to save bookmark");
     }
   } catch (err) {
     console.error('Bookmark error:', err);
+    const t = translations[currentLanguage];
     alert('Could not add to bookmarks');
-    bookmarkBtn.innerHTML = "⭐ Save";
+    bookmarkBtn.innerHTML = `⭐ ${t.save}`;
   } finally {
     bookmarkBtn.disabled = false;
   }
@@ -704,6 +1100,15 @@ if (helpButton) {
   });
 }
 
+if (assistantHelp) {
+  assistantHelp.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (helpButton) {
+      helpButton.click();
+    }
+  });
+}
+
 if (helpClose) {
   helpClose.addEventListener("click", () => {
     helpOverlay.classList.remove("open");
@@ -718,6 +1123,21 @@ window.addEventListener("click", (e) => {
     helpOverlay.style.opacity = 0;
     helpOverlay.style.pointerEvents = "none";
   }
+});
+
+toolbeltButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    const action = btn.dataset.action;
+    if (action === 'voice') {
+      voiceBtn?.click();
+    } else if (action === 'history') {
+      historyBtn?.click();
+    } else if (action === 'bookmarks') {
+      document.getElementById('bookmark-link')?.click();
+    } else if (action === 'help') {
+      document.getElementById('help-btn')?.click();
+    }
+  });
 });
 
 
