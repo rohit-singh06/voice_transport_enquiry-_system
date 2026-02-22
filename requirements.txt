@@ -2,7 +2,7 @@ Flask==2.3.3
 Flask-CORS==4.0.0
 SQLAlchemy==2.0.21
 psycopg2-binary==2.9.7
-speech_recognition==3.10.0
+SpeechRecognition==3.10.0
 pyttsx3==2.90
 requests==2.31.0
 streamlit==1.37.1
